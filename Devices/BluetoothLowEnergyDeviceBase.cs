@@ -12,7 +12,7 @@ using IRIS.Devices;
 using IRIS.Bluetooth.Windows.Communication;
 
 #elif OS_LINUX
-using IRIS.Bluetooth.Linux.Communication;
+// using IRIS.Bluetooth.Linux.Communication; // TODO: Uncomment this line when Linux implementation is available
 
 #endif
 
@@ -21,13 +21,13 @@ namespace IRIS.Bluetooth.Devices
     /// <summary>
     ///     Base class for Bluetooth Low Energy devices.
     /// </summary>
-    public abstract class BluetoothLowEnergyDeviceBase : BluetoothLowEnergyDeviceBaseInternal
+    public abstract class BluetoothLowEnergyDeviceBase : DeviceBase<IBluetoothLEInterface>
     {
         /// <summary>
         ///     List of all subscriptions on this device
         /// </summary>
         private List<SubscriptionInfo> _eventSubscriptions = new();
-        
+
         /// <summary>
         ///     Defines if device is connected to the hardware layer.
         /// </summary>
@@ -61,8 +61,15 @@ namespace IRIS.Bluetooth.Devices
         {
         }
 
-        protected BluetoothLowEnergyDeviceBase(IBluetoothLEAddress address) : base(address)
+        protected BluetoothLowEnergyDeviceBase(IBluetoothLEAddress address)
         {
+#if OS_WINDOWS
+            HardwareAccess = new WindowsBluetoothLEInterface(address);
+
+#elif OS_LINUX
+            // HardwareAccess = new LinuxBluetoothLEInterface(address); // TODO: Uncomment this line when Linux implementation is available
+#endif
+
             HardwareAccess.OnBluetoothDeviceConnected += OnDeviceConnected;
             HardwareAccess.OnBluetoothDeviceDisconnected += OnDeviceDisconnected;
         }
@@ -87,7 +94,7 @@ namespace IRIS.Bluetooth.Devices
                 _eventSubscriptions.RemoveAt(n);
             }
         }
-        
+
         /// <summary>
         ///     Internal method to configure the device and set proper flags
         ///     also searches for valid endpoints
@@ -297,10 +304,10 @@ namespace IRIS.Bluetooth.Devices
         {
             // Prevent doing any operations on this device
             IsReady = false;
-            
+
             // Check if device is null
             if (Device == null) return false;
-            
+
             // Release device
             ReleaseDevice();
             return true;
@@ -310,10 +317,10 @@ namespace IRIS.Bluetooth.Devices
         {
             // Check if device is null
             if (Device == null) return;
-            
+
             // Device is not ready anymore (ensure proper value)
             IsReady = false;
-            
+
             // Detach events and release device
             _DetachEvents();
             HardwareAccess.ReleaseDevice(Device);
@@ -335,27 +342,6 @@ namespace IRIS.Bluetooth.Devices
             // Disconnect when device is disconnected
             Disconnect();
             IsReady = false;
-        }
-    }
-
-    public abstract class BluetoothLowEnergyDeviceBaseInternal : DeviceBase<IBluetoothLEInterface>
-    {
-        // Constructor based on target Operating System
-#if OS_WINDOWS
-        internal BluetoothLowEnergyDeviceBaseInternal(IBluetoothLEAddress address) : this()
-        {
-            HardwareAccess = new WindowsBluetoothLEInterface(address);
-        }
-#elif OS_LINUX
-        internal BluetoothLowEnergyDeviceBaseInternal(IBluetoothLEAddress address) : this() 
-        {
-            HardwareAccess = new LinuxBluetoothLEInterface(address);
-        }
-#endif
-        // Constructor for internal use only
-        internal BluetoothLowEnergyDeviceBaseInternal()
-        {
-            
         }
     }
 }
