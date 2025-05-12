@@ -27,7 +27,7 @@ namespace IRIS.Bluetooth.Devices
         /// <summary>
         ///     List of all subscriptions on this device
         /// </summary>
-        private List<SubscriptionInfo> _eventSubscriptions = new();
+        private readonly List<SubscriptionInfo> _eventSubscriptions = new();
 
         /// <summary>
         ///     Defines if device is connected to the hardware layer.
@@ -103,11 +103,15 @@ namespace IRIS.Bluetooth.Devices
 
         protected void _DetachEvents()
         {
-            for (int n = _eventSubscriptions.Count - 1; n >= 0; n--)
+            // Check all subscriptions (in reverse order to make removal easier)
+            lock (_eventSubscriptions)
             {
-                // Unsubscribe event
-                _eventSubscriptions[n].Characteristic.ValueChanged -= _eventSubscriptions[n].Callback;
-                _eventSubscriptions.RemoveAt(n);
+                for (int n = _eventSubscriptions.Count - 1; n >= 0; n--)
+                {
+                    // Unsubscribe event
+                    _eventSubscriptions[n].Characteristic.ValueChanged -= _eventSubscriptions[n].Callback;
+                    _eventSubscriptions.RemoveAt(n);
+                }
             }
         }
 
@@ -133,13 +137,13 @@ namespace IRIS.Bluetooth.Devices
             }
         }
 
-        public ValueTask<IBluetoothLECharacteristic?> Require(
+        public ValueTask<IBluetoothLECharacteristic> Require(
             string characteristicUUIDRegex,
             CharacteristicValueChanged callback,
             CharacteristicFlags flags = CharacteristicFlags.None) =>
             Require(null, characteristicUUIDRegex, callback, flags);
 
-        public async ValueTask<IBluetoothLECharacteristic?> Require(
+        public async ValueTask<IBluetoothLECharacteristic> Require(
             string? serviceUUIDRegex,
             CharacteristicFlags flags,
             CharacteristicValueChanged callback)
@@ -155,7 +159,7 @@ namespace IRIS.Bluetooth.Devices
             return characteristic;
         }
 
-        public async ValueTask<IBluetoothLECharacteristic?> Require(
+        public async ValueTask<IBluetoothLECharacteristic> Require(
             string? serviceUUIDRegex,
             string characteristicUUIDRegex,
             CharacteristicValueChanged callback,
@@ -172,7 +176,7 @@ namespace IRIS.Bluetooth.Devices
             return characteristic;
         }
 
-        public async ValueTask<IBluetoothLECharacteristic?> Require(
+        public async ValueTask<IBluetoothLECharacteristic> Require(
             string? serviceUUIDRegex,
             CharacteristicFlags flags)
         {
@@ -186,7 +190,7 @@ namespace IRIS.Bluetooth.Devices
             return characteristic;
         }
 
-        public async ValueTask<IBluetoothLECharacteristic?> Require(
+        public async ValueTask<IBluetoothLECharacteristic> Require(
             string? serviceUUIDRegex,
             string characteristicUUIDRegex,
             CharacteristicFlags flags = CharacteristicFlags.None)
@@ -253,7 +257,8 @@ namespace IRIS.Bluetooth.Devices
             characteristic.ValueChanged += callback;
 
             // Register subscription
-            _eventSubscriptions.Add(new SubscriptionInfo(characteristic, callback));
+            lock(_eventSubscriptions)
+                _eventSubscriptions.Add(new SubscriptionInfo(characteristic, callback));
 
             // Subscribe to notifications
             await characteristic.SubscribeAsync();
