@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using IRIS.Bluetooth.Common;
 using IRIS.Bluetooth.Common.Abstract;
@@ -63,12 +64,27 @@ namespace IRIS.Bluetooth.Devices
 
         protected BluetoothLowEnergyDeviceBase(IBluetoothLEAddress address)
         {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                // HardwareAccess = new LinuxBluetoothLEInterface(address); // TODO: Uncomment this line when Linux implementation is available    
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                // HardwareAccess = new MacOSBluetoothLEInterface(address); // TODO: Uncomment this line when MacOS implementation is available
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD))
+            {
+                throw new NotSupportedException();
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
 #if OS_WINDOWS
-            HardwareAccess = new WindowsBluetoothLEInterface(address);
-
-#elif OS_LINUX
-            // HardwareAccess = new LinuxBluetoothLEInterface(address); // TODO: Uncomment this line when Linux implementation is available
+                HardwareAccess = new WindowsBluetoothLEInterface(address);
+#else
+                throw new NotSupportedException("To make it work on Windows you need to explicitly use Windows .NET Runtime API.");
 #endif
+            }
+
 
             HardwareAccess.OnBluetoothDeviceConnected += OnDeviceConnected;
             HardwareAccess.OnBluetoothDeviceDisconnected += OnDeviceDisconnected;
