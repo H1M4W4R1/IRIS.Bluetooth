@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">    
+    
+    <!-- Define constants for different platforms -->
+    <PropertyGroup>
+        <TargetFrameworks>net8.0-windows10.0.19041.0;net8.0</TargetFrameworks>
+        <LangVersion>latestmajor</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+
+        <IsWindows Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))' == 'true'">true</IsWindows>
+        <IsOSX Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' == 'true'">true</IsOSX>
+        <IsLinux Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">true</IsLinux>
+    </PropertyGroup>
+
+    <!-- We can only build for Windows when Windows API is provided -->
+    <PropertyGroup Condition="'$(IsWindows)'=='true'">
+        <DefineConstants Condition="$(TargetFramework) != 'net8.0'">OS_WINDOWS</DefineConstants>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(IsLinux)'=='true'">
+        <DefineConstants>OS_LINUX</DefineConstants>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(IsOSX)'=='true'">
+        <DefineConstants>OS_OSX</DefineConstants>
+    </PropertyGroup>
+        
+    <!-- Add project references -->
+    <ItemGroup Condition="'$(IsWindows)'=='true'">
+        <ProjectReference Include="..\IRIS\IRIS.csproj" />
+        <ProjectReference Include="..\IRIS.Bluetooth.Common\IRIS.Bluetooth.Common.csproj" />   
+        
+        <!-- We ignore inclusion of Windows Bluetooth framework when Windows API is not supported -->
+        <ProjectReference Include="..\IRIS.Bluetooth.Windows\IRIS.Bluetooth.Windows.csproj" 
+            Condition="$(TargetFramework) != 'net8.0'"/>
+    </ItemGroup>
+    
+    <!-- Luckily Linux is not a bitch like Windows and works like charm -->
+    <ItemGroup Condition="$(TargetFramework) == 'net8.0'">
+        <ProjectReference Include="..\IRIS\IRIS.csproj" />
+        <ProjectReference Include="..\IRIS.Bluetooth.Common\IRIS.Bluetooth.Common.csproj" />
+        <ProjectReference Include="..\IRIS.Bluetooth.Linux\IRIS.Bluetooth.Linux.csproj" />
+    </ItemGroup>
+</Project>
