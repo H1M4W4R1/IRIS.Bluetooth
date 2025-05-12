@@ -139,14 +139,14 @@ namespace IRIS.Bluetooth.Devices
 
         public ValueTask<IBluetoothLECharacteristic> Require(
             string characteristicUUIDRegex,
-            CharacteristicValueChanged callback,
+            CharacteristicValueChangedHandler callback,
             CharacteristicFlags flags = CharacteristicFlags.None) =>
             Require(null, characteristicUUIDRegex, callback, flags);
 
         public async ValueTask<IBluetoothLECharacteristic> Require(
             string? serviceUUIDRegex,
             CharacteristicFlags flags,
-            CharacteristicValueChanged callback)
+            CharacteristicValueChangedHandler callback)
         {
             // Get the characteristic
             IBluetoothLECharacteristic?
@@ -162,7 +162,7 @@ namespace IRIS.Bluetooth.Devices
         public async ValueTask<IBluetoothLECharacteristic> Require(
             string? serviceUUIDRegex,
             string characteristicUUIDRegex,
-            CharacteristicValueChanged callback,
+            CharacteristicValueChangedHandler callback,
             CharacteristicFlags flags = CharacteristicFlags.None)
         {
             // Get the characteristic
@@ -208,14 +208,14 @@ namespace IRIS.Bluetooth.Devices
 
         public ValueTask<IBluetoothLECharacteristic?> Use(
             string characteristicUUIDRegex,
-            CharacteristicValueChanged callback,
+            CharacteristicValueChangedHandler callback,
             CharacteristicFlags flags = CharacteristicFlags.None) =>
             Use(null, characteristicUUIDRegex, callback, flags);
 
         public async ValueTask<IBluetoothLECharacteristic?> Use(
             string? serviceUUIDRegex,
             CharacteristicFlags flags,
-            CharacteristicValueChanged callback)
+            CharacteristicValueChangedHandler callback)
         {
             // Get characteristic
             IBluetoothLECharacteristic? characteristic = await Use(serviceUUIDRegex, flags);
@@ -232,7 +232,7 @@ namespace IRIS.Bluetooth.Devices
         public async ValueTask<IBluetoothLECharacteristic?> Use(
             string? serviceUUIDRegex,
             string characteristicUUIDRegex,
-            CharacteristicValueChanged callback,
+            CharacteristicValueChangedHandler callback,
             CharacteristicFlags flags
                 = CharacteristicFlags.None)
         {
@@ -251,7 +251,7 @@ namespace IRIS.Bluetooth.Devices
 
         private async ValueTask SubscribeCharacteristic(
             IBluetoothLECharacteristic characteristic,
-            CharacteristicValueChanged callback)
+            CharacteristicValueChangedHandler callback)
         {
             // Attach handler
             characteristic.ValueChanged += callback;
