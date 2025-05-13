@@ -13,8 +13,7 @@ using IRIS.Devices;
 using IRIS.Bluetooth.Windows.Communication;
 
 #elif OS_LINUX
-// using IRIS.Bluetooth.Linux.Communication; // TODO: Uncomment this line when Linux implementation is available
-
+    using IRIS.Bluetooth.Linux.Communication;
 #endif
 
 namespace IRIS.Bluetooth.Devices
@@ -66,7 +65,10 @@ namespace IRIS.Bluetooth.Devices
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                // HardwareAccess = new LinuxBluetoothLEInterface(address); // TODO: Uncomment this line when Linux implementation is available    
+#if OS_LINUX
+                HardwareAccess =
+ new LinuxBluetoothLEInterface(address); 
+#endif
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
@@ -257,8 +259,7 @@ namespace IRIS.Bluetooth.Devices
             characteristic.ValueChanged += callback;
 
             // Register subscription
-            lock(_eventSubscriptions)
-                _eventSubscriptions.Add(new SubscriptionInfo(characteristic, callback));
+            lock (_eventSubscriptions) _eventSubscriptions.Add(new SubscriptionInfo(characteristic, callback));
 
             // Subscribe to notifications
             await characteristic.SubscribeAsync();
