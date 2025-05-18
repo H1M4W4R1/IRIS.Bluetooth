@@ -311,7 +311,7 @@ namespace IRIS.Bluetooth.Devices
             await HardwareAccess.Connect(cancellationToken);
 
             // Wait for free device to appear
-            Device = HardwareAccess.ClaimDevice(cancellationToken);
+            Device = await HardwareAccess.ClaimDevice(cancellationToken);
 
             // Check if device was acquired correctly
             if (Device == null) return false;
@@ -335,7 +335,7 @@ namespace IRIS.Bluetooth.Devices
             return ValueTask.FromResult(true);
         }
 
-        private void ReleaseDevice()
+        private async void ReleaseDevice()
         {
             // Check if device is null
             if (Device == null) return;
@@ -345,7 +345,7 @@ namespace IRIS.Bluetooth.Devices
 
             // Detach events and release device
             _DetachEvents();
-            HardwareAccess.ReleaseDevice(Device);
+            await HardwareAccess.ReleaseDevice(Device);
             Device = null;
         }
 
