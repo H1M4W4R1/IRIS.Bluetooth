@@ -279,7 +279,7 @@ namespace IRIS.Bluetooth.Devices
             IBluetoothLECharacteristic? foundCharacteristic =
                 characteristics.FirstOrDefault(c => c.IsValidForFlags(flags));
 
-            return ValueTask.FromResult<IBluetoothLECharacteristic?>(foundCharacteristic);
+            return ValueTask.FromResult(foundCharacteristic);
         }
 
         public ValueTask<IBluetoothLECharacteristic?> Use(
@@ -305,10 +305,10 @@ namespace IRIS.Bluetooth.Devices
             return ValueTask.FromResult(characteristic);
         }
 
-        public override bool Connect(CancellationToken cancellationToken = default)
+        public override async ValueTask<bool> Connect(CancellationToken cancellationToken = default)
         {
             // Connect to hardware access (ensure discovery is started)
-            HardwareAccess.Connect(cancellationToken);
+            await HardwareAccess.Connect(cancellationToken);
 
             // Wait for free device to appear
             Device = HardwareAccess.ClaimDevice(cancellationToken);
@@ -322,17 +322,17 @@ namespace IRIS.Bluetooth.Devices
             return true;
         }
 
-        public override bool Disconnect(CancellationToken cancellationToken = default)
+        public override ValueTask<bool> Disconnect(CancellationToken cancellationToken = default)
         {
             // Prevent doing any operations on this device
             IsReady = false;
 
             // Check if device is null
-            if (Device == null) return false;
+            if (Device == null) return ValueTask.FromResult(false);
 
             // Release device
             ReleaseDevice();
-            return true;
+            return ValueTask.FromResult(true);
         }
 
         private void ReleaseDevice()
@@ -357,12 +357,12 @@ namespace IRIS.Bluetooth.Devices
             _ConfigureDevice();
         }
 
-        private void OnDeviceDisconnected(IBluetoothLEInterface sender, IBluetoothLEDevice device)
+        private async void OnDeviceDisconnected(IBluetoothLEInterface sender, IBluetoothLEDevice device)
         {
             if (device != Device) return;
 
             // Disconnect when device is disconnected
-            Disconnect();
+            await Disconnect();
             IsReady = false;
         }
     }
