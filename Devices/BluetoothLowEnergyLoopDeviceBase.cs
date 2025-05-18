@@ -21,7 +21,7 @@ namespace IRIS.Bluetooth.Devices
         /// <summary>
         /// Actions that shall be performed in the loop
         /// </summary>
-        protected abstract void OnDeviceLoop(CancellationToken cancellationToken = default);
+        protected abstract ValueTask OnDeviceLoop(CancellationToken cancellationToken = default);
 
         private async void StartDeviceLoop(CancellationToken cancellationToken = default)
         {
@@ -39,7 +39,7 @@ namespace IRIS.Bluetooth.Devices
                     }
 
                     // Call the loop method
-                    OnDeviceLoop(cancellationToken);
+                    await OnDeviceLoop(cancellationToken);
                 }
                 catch (Exception anyException)
                 {
