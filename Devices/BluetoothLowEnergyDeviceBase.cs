@@ -316,6 +316,10 @@ namespace IRIS.Bluetooth.Devices
             // Check if device was acquired correctly
             if (Device == null) return false;
 
+            // Wait a while for device to be connected properly
+            // as BLE seems to have small issues when this is not provided
+            await Task.Delay(25, cancellationToken);
+            
             // Configure device as OnDeviceConnected won't be called
             _ConfigureDevice();
 
