@@ -4,25 +4,39 @@ using IRIS.Bluetooth.Common.Data;
 namespace IRIS.Bluetooth.Devices
 {
     /// <summary>
-    /// Bluetooth LE Device that has loop to perform time-based actions
+    /// Base class for Bluetooth Low Energy devices that require continuous monitoring or periodic operations.
+    /// This class implements a background loop mechanism that executes device-specific actions at regular intervals
+    /// while the device is connected.
     /// </summary>
     public abstract class BluetoothLowEnergyLoopDeviceBase : BluetoothLowEnergyDeviceBase
     {
         /// <summary>
-        /// Used to cancel the loop while disposing the device
+        /// Cancellation token source used to gracefully terminate the device loop when the device is disposed
+        /// or disconnected. This ensures proper cleanup of background operations.
         /// </summary>
         protected readonly CancellationTokenSource deviceLoopCancellationTokenSource = new();
 
         /// <summary>
-        /// Indicates if the loop should throw exceptions
+        /// Controls the exception handling behavior of the device loop.
+        /// When set to true, exceptions in the loop will be propagated to the caller.
+        /// When false (default), exceptions are logged but not propagated.
         /// </summary>
         protected virtual bool ThrowLoopExceptions => false;
 
         /// <summary>
-        /// Actions that shall be performed in the loop
+        /// Abstract method that defines the core operations to be performed in each iteration of the device loop.
+        /// Implementations should include device-specific monitoring, data collection, or control operations.
         /// </summary>
+        /// <param name="cancellationToken">Token to cancel the operation.</param>
+        /// <returns>A ValueTask representing the asynchronous operation.</returns>
         protected abstract ValueTask OnDeviceLoop(CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Initializes and manages the background loop for device operations.
+        /// The loop continues until cancellation is requested, checking device connection status
+        /// and executing device-specific operations at each iteration.
+        /// </summary>
+        /// <param name="cancellationToken">Token to cancel the loop operation.</param>
         private async void StartDeviceLoop(CancellationToken cancellationToken = default)
         {
             // Perform loop actions here
@@ -52,17 +66,30 @@ namespace IRIS.Bluetooth.Devices
             }
         }
 
+        /// <summary>
+        /// Initializes a new instance of the BluetoothLowEnergyLoopDeviceBase class using a regex pattern for device identification.
+        /// </summary>
+        /// <param name="regexPattern">The regex pattern to match the device name or identifier.</param>
+        /// <param name="regexType">The type of regex matching to perform (defaults to Name).</param>
         public BluetoothLowEnergyLoopDeviceBase(string regexPattern, RegexType regexType = RegexType.Name) : base(
             regexPattern, regexType)
         {
             StartDeviceLoop(deviceLoopCancellationTokenSource.Token);
         }
 
+        /// <summary>
+        /// Initializes a new instance of the BluetoothLowEnergyLoopDeviceBase class using a specific service UUID.
+        /// </summary>
+        /// <param name="serviceUUID">The UUID of the service to connect to.</param>
         public BluetoothLowEnergyLoopDeviceBase(Guid serviceUUID) : base(serviceUUID)
         {
             StartDeviceLoop(deviceLoopCancellationTokenSource.Token);
         }
 
+        /// <summary>
+        /// Initializes a new instance of the BluetoothLowEnergyLoopDeviceBase class using a Bluetooth LE address.
+        /// </summary>
+        /// <param name="bleAddress">The Bluetooth LE address of the device to connect to.</param>
         public BluetoothLowEnergyLoopDeviceBase(ulong bleAddress) : base(bleAddress)
         {
             StartDeviceLoop(deviceLoopCancellationTokenSource.Token);

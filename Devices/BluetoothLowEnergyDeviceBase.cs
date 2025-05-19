@@ -19,31 +19,41 @@ using IRIS.Bluetooth.Windows.Communication;
 namespace IRIS.Bluetooth.Devices
 {
     /// <summary>
-    ///     Base class for Bluetooth Low Energy devices.
+    ///     Base class for Bluetooth Low Energy devices that provides common functionality for BLE device management,
+    ///     characteristic handling, and platform-specific implementations.
     /// </summary>
     public abstract class BluetoothLowEnergyDeviceBase : DeviceBase<IBluetoothLEInterface>
     {
         /// <summary>
-        ///     List of all subscriptions on this device
+        ///     Maintains a list of all active event subscriptions for this device.
+        ///     Used to properly clean up event handlers when the device is disconnected.
         /// </summary>
         private readonly List<SubscriptionInfo> _eventSubscriptions = new();
 
         /// <summary>
-        ///     Defines if device is connected to the hardware layer.
+        ///     Indicates whether the device is currently connected to the hardware layer.
+        ///     Returns true if the Device property is not null.
         /// </summary>
         public bool IsConnected => Device != null;
 
         /// <summary>
-        ///     Defines if device is ready to be used. Sometimes it might be necessary to delay
-        ///     configuration of the device until the hardware layer is ready. Linux API is sometimes trashy.
+        ///     Indicates whether the device is fully initialized and ready for use.
+        ///     This flag accounts for platform-specific initialization delays, particularly on Linux
+        ///     where the BLE stack may require additional time to stabilize.
         /// </summary>
         public bool IsReady { get; private set; }
 
         /// <summary>
-        ///     Device reference for the device that is currently used as hardware layer.
+        ///     Reference to the current hardware layer device implementation.
+        ///     Null when the device is not connected.
         /// </summary>
         public IBluetoothLEDevice? Device { get; private set; }
 
+        /// <summary>
+        ///     Initializes a new BLE device using a regex pattern to match device names or service UUIDs.
+        /// </summary>
+        /// <param name="regexPattern">The regex pattern to match against device names or service UUIDs</param>
+        /// <param name="regexType">Specifies whether the pattern matches against device names or service UUIDs</param>
         protected BluetoothLowEnergyDeviceBase(string regexPattern, RegexType regexType = RegexType.Name) : this(
             regexType == RegexType.Name
                 ? new BluetoothLENameAddress(regexPattern)
@@ -51,16 +61,30 @@ namespace IRIS.Bluetooth.Devices
         {
         }
 
+        /// <summary>
+        ///     Initializes a new BLE device using a specific service UUID.
+        /// </summary>
+        /// <param name="serviceUUID">The UUID of the service to connect to</param>
         protected BluetoothLowEnergyDeviceBase(Guid serviceUUID) : this(
             new BluetoothLEServiceAddress(serviceUUID.ToString()))
         {
         }
 
+        /// <summary>
+        ///     Initializes a new BLE device using a specific BLE address.
+        /// </summary>
+        /// <param name="bleAddress">The 64-bit BLE address of the device</param>
         protected BluetoothLowEnergyDeviceBase(ulong bleAddress) : this(
             new BluetoothLEDeviceIdentifierAddress(bleAddress))
         {
         }
 
+        /// <summary>
+        ///     Initializes a new BLE device using a custom address implementation.
+        ///     Sets up platform-specific hardware access and event handlers.
+        /// </summary>
+        /// <param name="address">The BLE address implementation to use for device discovery</param>
+        /// <exception cref="NotSupportedException">Thrown when the current platform is not supported</exception>
         protected BluetoothLowEnergyDeviceBase(IBluetoothLEAddress address)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
@@ -87,11 +111,13 @@ namespace IRIS.Bluetooth.Devices
 #endif
             }
 
-
             HardwareAccess.OnBluetoothDeviceConnected += OnDeviceConnected;
             HardwareAccess.OnBluetoothDeviceDisconnected += OnDeviceDisconnected;
         }
 
+        /// <summary>
+        ///     Finalizer to ensure proper cleanup of event handlers.
+        /// </summary>
         ~BluetoothLowEnergyDeviceBase()
         {
             HardwareAccess.OnBluetoothDeviceConnected -= OnDeviceConnected;
@@ -99,18 +125,21 @@ namespace IRIS.Bluetooth.Devices
         }
 
         /// <summary>
-        ///     Handles the configuration of the device.
+        ///     Abstract method that must be implemented by derived classes to handle device-specific configuration.
+        ///     This is called after the device is connected and before it is marked as ready.
         /// </summary>
         public abstract ValueTask Configure();
 
+        /// <summary>
+        ///     Detaches all event handlers from the device's characteristics and clears the subscription list.
+        ///     Called during device cleanup to prevent memory leaks.
+        /// </summary>
         protected void _DetachEvents()
         {
-            // Check all subscriptions (in reverse order to make removal easier)
             lock (_eventSubscriptions)
             {
                 for (int n = _eventSubscriptions.Count - 1; n >= 0; n--)
                 {
-                    // Unsubscribe event
                     _eventSubscriptions[n].Characteristic.ValueChanged -= _eventSubscriptions[n].Callback;
                     _eventSubscriptions.RemoveAt(n);
                 }
@@ -118,8 +147,8 @@ namespace IRIS.Bluetooth.Devices
         }
 
         /// <summary>
-        ///     Internal method to configure the device and set proper flags
-        ///     also searches for valid endpoints
+        ///     Internal method that handles device configuration and sets the ready flag.
+        ///     Called after device connection is established.
         /// </summary>
         private async void _ConfigureDevice()
         {
@@ -139,81 +168,96 @@ namespace IRIS.Bluetooth.Devices
             }
         }
 
+        /// <summary>
+        ///     Requires a characteristic with the specified UUID pattern and callback.
+        ///     Throws MissingRequiredCharacteristicException if the characteristic is not found.
+        /// </summary>
         public ValueTask<IBluetoothLECharacteristic> Require(
             string characteristicUUIDRegex,
             CharacteristicValueChangedHandler callback,
             CharacteristicFlags flags = CharacteristicFlags.None) =>
             Require(null, characteristicUUIDRegex, callback, flags);
 
+        /// <summary>
+        ///     Requires a characteristic with the specified service UUID pattern and flags.
+        ///     Throws MissingRequiredCharacteristicException if the characteristic is not found.
+        /// </summary>
         public async ValueTask<IBluetoothLECharacteristic> Require(
             string? serviceUUIDRegex,
             CharacteristicFlags flags,
             CharacteristicValueChangedHandler callback)
         {
-            // Get the characteristic
-            IBluetoothLECharacteristic?
-                characteristic = await Use(serviceUUIDRegex, flags, callback);
-
-            // Check if characteristic is null
+            IBluetoothLECharacteristic? characteristic = await Use(serviceUUIDRegex, flags, callback);
             if (characteristic == null) throw new MissingRequiredCharacteristicException();
-
-            // Return characteristic
             return characteristic;
         }
 
+        /// <summary>
+        ///     Requires a characteristic with the specified service and characteristic UUID patterns.
+        ///     Throws MissingRequiredCharacteristicException if the characteristic is not found.
+        /// </summary>
         public async ValueTask<IBluetoothLECharacteristic> Require(
             string? serviceUUIDRegex,
             string characteristicUUIDRegex,
             CharacteristicValueChangedHandler callback,
             CharacteristicFlags flags = CharacteristicFlags.None)
         {
-            // Get the characteristic
             IBluetoothLECharacteristic? characteristic =
                 await Use(serviceUUIDRegex, characteristicUUIDRegex, callback, flags);
-
-            // Check if characteristic is null
             if (characteristic == null) throw new MissingRequiredCharacteristicException();
-
-            // Return characteristic
             return characteristic;
         }
 
+        /// <summary>
+        ///     Requires a characteristic with the specified service UUID pattern and flags.
+        ///     Throws MissingRequiredCharacteristicException if the characteristic is not found.
+        /// </summary>
         public async ValueTask<IBluetoothLECharacteristic> Require(
             string? serviceUUIDRegex,
             CharacteristicFlags flags)
         {
-            // Get the characteristic
             IBluetoothLECharacteristic? characteristic = await Use(serviceUUIDRegex, flags);
-
-            // Check if characteristic is null
             if (characteristic == null) throw new MissingRequiredCharacteristicException();
-
-            // Return characteristic
             return characteristic;
         }
 
+        /// <summary>
+        ///     Requires a characteristic with the specified service and characteristic UUID patterns.
+        ///     Throws MissingRequiredCharacteristicException if the characteristic is not found.
+        /// </summary>
         public async ValueTask<IBluetoothLECharacteristic> Require(
             string? serviceUUIDRegex,
             string characteristicUUIDRegex,
             CharacteristicFlags flags = CharacteristicFlags.None)
         {
-            // Get the characteristic
             IBluetoothLECharacteristic? characteristic =
                 await Use(serviceUUIDRegex, characteristicUUIDRegex, flags);
-
-            // Check if characteristic is null
             if (characteristic == null) throw new MissingRequiredCharacteristicException();
-
-            // Return characteristic
             return characteristic;
         }
 
+        /// <summary>
+        ///     Attempts to use a characteristic with the specified UUID pattern and callback.
+        ///     Returns null if the characteristic is not found.
+        /// </summary>
+        /// <param name="characteristicUUIDRegex">The regex pattern to match the characteristic UUID.</param>
+        /// <param name="callback">The handler to be called when the characteristic's value changes.</param>
+        /// <param name="flags">Optional flags to filter characteristics.</param>
+        /// <returns>A ValueTask containing the found characteristic or null if not found.</returns>
         public ValueTask<IBluetoothLECharacteristic?> Use(
             string characteristicUUIDRegex,
             CharacteristicValueChangedHandler callback,
             CharacteristicFlags flags = CharacteristicFlags.None) =>
             Use(null, characteristicUUIDRegex, callback, flags);
 
+        /// <summary>
+        ///     Attempts to use a characteristic with the specified service UUID pattern, flags, and callback.
+        ///     Returns null if the characteristic is not found.
+        /// </summary>
+        /// <param name="serviceUUIDRegex">The regex pattern to match the service UUID, or null to search all services.</param>
+        /// <param name="flags">Flags to filter characteristics.</param>
+        /// <param name="callback">The handler to be called when the characteristic's value changes.</param>
+        /// <returns>A ValueTask containing the found characteristic or null if not found.</returns>
         public async ValueTask<IBluetoothLECharacteristic?> Use(
             string? serviceUUIDRegex,
             CharacteristicFlags flags,
@@ -231,6 +275,15 @@ namespace IRIS.Bluetooth.Devices
             return characteristic;
         }
 
+        /// <summary>
+        ///     Attempts to use a characteristic with the specified service and characteristic UUID patterns and callback.
+        ///     Returns null if the characteristic is not found.
+        /// </summary>
+        /// <param name="serviceUUIDRegex">The regex pattern to match the service UUID, or null to search all services.</param>
+        /// <param name="characteristicUUIDRegex">The regex pattern to match the characteristic UUID.</param>
+        /// <param name="callback">The handler to be called when the characteristic's value changes.</param>
+        /// <param name="flags">Optional flags to filter characteristics.</param>
+        /// <returns>A ValueTask containing the found characteristic or null if not found.</returns>
         public async ValueTask<IBluetoothLECharacteristic?> Use(
             string? serviceUUIDRegex,
             string characteristicUUIDRegex,
@@ -251,6 +304,11 @@ namespace IRIS.Bluetooth.Devices
             return characteristic;
         }
 
+        /// <summary>
+        ///     Subscribes to a characteristic's value changes and registers the subscription for cleanup.
+        /// </summary>
+        /// <param name="characteristic">The characteristic to subscribe to.</param>
+        /// <param name="callback">The handler to be called when the characteristic's value changes.</param>
         private async ValueTask SubscribeCharacteristic(
             IBluetoothLECharacteristic characteristic,
             CharacteristicValueChangedHandler callback)
@@ -265,6 +323,13 @@ namespace IRIS.Bluetooth.Devices
             await characteristic.SubscribeAsync();
         }
 
+        /// <summary>
+        ///     Attempts to find a characteristic matching the specified service UUID pattern and flags.
+        ///     Returns null if no matching characteristic is found.
+        /// </summary>
+        /// <param name="serviceUUIDRegex">The regex pattern to match the service UUID, or null to search all services.</param>
+        /// <param name="flags">Flags to filter characteristics.</param>
+        /// <returns>A ValueTask containing the found characteristic or null if not found.</returns>
         public ValueTask<IBluetoothLECharacteristic?> Use(string? serviceUUIDRegex, CharacteristicFlags flags)
         {
             // Check if device is not null
@@ -282,6 +347,14 @@ namespace IRIS.Bluetooth.Devices
             return ValueTask.FromResult(foundCharacteristic);
         }
 
+        /// <summary>
+        ///     Attempts to find a characteristic matching the specified service and characteristic UUID patterns.
+        ///     Returns null if no matching characteristic is found.
+        /// </summary>
+        /// <param name="serviceUUIDRegex">The regex pattern to match the service UUID, or null to search all services.</param>
+        /// <param name="characteristicUUIDRegex">The regex pattern to match the characteristic UUID.</param>
+        /// <param name="flags">Optional flags to filter characteristics.</param>
+        /// <returns>A ValueTask containing the found characteristic or null if not found.</returns>
         public ValueTask<IBluetoothLECharacteristic?> Use(
             string? serviceUUIDRegex,
             string characteristicUUIDRegex,
@@ -305,6 +378,13 @@ namespace IRIS.Bluetooth.Devices
             return ValueTask.FromResult(characteristic);
         }
 
+        /// <summary>
+        ///     Establishes a connection to the Bluetooth LE device.
+        ///     This method handles the connection process, including hardware access initialization,
+        ///     device claiming, and initial configuration.
+        /// </summary>
+        /// <param name="cancellationToken">Token to cancel the operation.</param>
+        /// <returns>A ValueTask containing true if the connection was successful, false otherwise.</returns>
         public override async ValueTask<bool> Connect(CancellationToken cancellationToken = default)
         {
             // Connect to hardware access (ensure discovery is started)
@@ -326,6 +406,11 @@ namespace IRIS.Bluetooth.Devices
             return true;
         }
 
+        /// <summary>
+        ///     Disconnects from the Bluetooth LE device and releases associated resources.
+        /// </summary>
+        /// <param name="cancellationToken">Token to cancel the operation.</param>
+        /// <returns>A ValueTask containing true if the disconnection was successful, false otherwise.</returns>
         public override ValueTask<bool> Disconnect(CancellationToken cancellationToken = default)
         {
             // Prevent doing any operations on this device
@@ -339,6 +424,10 @@ namespace IRIS.Bluetooth.Devices
             return ValueTask.FromResult(true);
         }
 
+        /// <summary>
+        ///     Releases the device and cleans up associated resources.
+        ///     This method handles event detachment and device release through the hardware access layer.
+        /// </summary>
         private async void ReleaseDevice()
         {
             // Check if device is null
@@ -353,6 +442,12 @@ namespace IRIS.Bluetooth.Devices
             Device = null;
         }
 
+        /// <summary>
+        ///     Handles the device connected event.
+        ///     Configures the device when it is successfully connected.
+        /// </summary>
+        /// <param name="sender">The sender of the event.</param>
+        /// <param name="device">The connected device.</param>
         private void OnDeviceConnected(IBluetoothLEInterface sender, IBluetoothLEDevice device)
         {
             if (device != Device) return;
@@ -361,6 +456,12 @@ namespace IRIS.Bluetooth.Devices
             _ConfigureDevice();
         }
 
+        /// <summary>
+        ///     Handles the device disconnected event.
+        ///     Ensures proper cleanup of device resources and state when the device is disconnected.
+        /// </summary>
+        /// <param name="sender">The sender of the event.</param>
+        /// <param name="device">The disconnected device.</param>
         private async void OnDeviceDisconnected(IBluetoothLEInterface sender, IBluetoothLEDevice device)
         {
             if (device != Device) return;
