@@ -168,7 +168,7 @@ namespace IRIS.Bluetooth.Devices
             catch (MissingRequiredCharacteristicException)
             {
                 ReleaseDevice();
-                return DeviceOperation.Result<MissingRequiredCharacteristicResult>();
+                return DeviceOperation.Result<DeviceMissingRequiredCharacteristicResult>();
             }
             catch (Exception e)
             {

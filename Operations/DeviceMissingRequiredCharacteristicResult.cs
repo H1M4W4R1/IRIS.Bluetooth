@@ -6,7 +6,7 @@ namespace IRIS.Bluetooth.Operations
     /// <summary>
     ///     Represents a result when device is missing required characteristic.
     /// </summary>
-    public readonly struct MissingRequiredCharacteristicResult : IDeviceOperationResult
+    public readonly struct DeviceMissingRequiredCharacteristicResult : IDeviceOperationResult
     {
         /// <summary>
         ///     Gets a value indicating whether the operation was successful.
@@ -17,6 +17,6 @@ namespace IRIS.Bluetooth.Operations
         ///     Implicitly converts the result to a boolean indicating success.
         /// </summary>
         /// <param name="result">The result to convert.</param>
-        public static implicit operator bool(MissingRequiredCharacteristicResult result) => result.IsSuccess;
+        public static implicit operator bool(DeviceMissingRequiredCharacteristicResult result) => result.IsSuccess;
     }
 }
