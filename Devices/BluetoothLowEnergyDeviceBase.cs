@@ -418,7 +418,8 @@ namespace IRIS.Bluetooth.Devices
             Device = await HardwareAccess.ClaimDevice(cancellationToken);
 
             // Check if device was acquired correctly
-            if (Device == null) DeviceOperation.Result<DeviceNotFoundResult>();
+            if (Device == null) 
+                return DeviceOperation.Result<DeviceNotFoundResult>();
 
             // Wait a while for device to be connected properly
             // as BLE seems to have small issues when this is not provided
