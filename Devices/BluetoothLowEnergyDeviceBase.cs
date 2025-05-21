@@ -11,8 +11,6 @@ using IRIS.Devices;
 using IRIS.Operations;
 using IRIS.Operations.Abstract;
 using IRIS.Operations.Connection;
-using IRIS.Operations.Generic;
-
 #if OS_WINDOWS
 using IRIS.Bluetooth.Windows.Communication;
 
@@ -247,7 +245,6 @@ namespace IRIS.Bluetooth.Devices
         /// <param name="characteristicUUIDRegex">The regex pattern to match the characteristic UUID.</param>
         /// <param name="callback">The handler to be called when the characteristic's value changes.</param>
         /// <param name="flags">Optional flags to filter characteristics.</param>
-        /// <returns>A ValueTask containing the found characteristic or null if not found.</returns>
         public ValueTask<IBluetoothLECharacteristic?> Use(
             string characteristicUUIDRegex,
             CharacteristicValueChangedHandler callback,
@@ -261,7 +258,6 @@ namespace IRIS.Bluetooth.Devices
         /// <param name="serviceUUIDRegex">The regex pattern to match the service UUID, or null to search all services.</param>
         /// <param name="flags">Flags to filter characteristics.</param>
         /// <param name="callback">The handler to be called when the characteristic's value changes.</param>
-        /// <returns>A ValueTask containing the found characteristic or null if not found.</returns>
         public async ValueTask<IBluetoothLECharacteristic?> Use(
             string? serviceUUIDRegex,
             CharacteristicFlags flags,
@@ -287,7 +283,6 @@ namespace IRIS.Bluetooth.Devices
         /// <param name="characteristicUUIDRegex">The regex pattern to match the characteristic UUID.</param>
         /// <param name="callback">The handler to be called when the characteristic's value changes.</param>
         /// <param name="flags">Optional flags to filter characteristics.</param>
-        /// <returns>A ValueTask containing the found characteristic or null if not found.</returns>
         public async ValueTask<IBluetoothLECharacteristic?> Use(
             string? serviceUUIDRegex,
             string characteristicUUIDRegex,
@@ -333,7 +328,6 @@ namespace IRIS.Bluetooth.Devices
         /// </summary>
         /// <param name="serviceUUIDRegex">The regex pattern to match the service UUID, or null to search all services.</param>
         /// <param name="flags">Flags to filter characteristics.</param>
-        /// <returns>A ValueTask containing the found characteristic or null if not found.</returns>
         public ValueTask<IBluetoothLECharacteristic?> Use(string? serviceUUIDRegex, CharacteristicFlags flags)
         {
             // Check if device is not null
@@ -358,7 +352,6 @@ namespace IRIS.Bluetooth.Devices
         /// <param name="serviceUUIDRegex">The regex pattern to match the service UUID, or null to search all services.</param>
         /// <param name="characteristicUUIDRegex">The regex pattern to match the characteristic UUID.</param>
         /// <param name="flags">Optional flags to filter characteristics.</param>
-        /// <returns>A ValueTask containing the found characteristic or null if not found.</returns>
         public ValueTask<IBluetoothLECharacteristic?> Use(
             string? serviceUUIDRegex,
             string characteristicUUIDRegex,
