@@ -8,6 +8,10 @@ using IRIS.Bluetooth.Common.Data;
 using IRIS.Bluetooth.Data;
 using IRIS.Bluetooth.Exceptions;
 using IRIS.Devices;
+using IRIS.Operations;
+using IRIS.Operations.Abstract;
+using IRIS.Operations.Connection;
+using IRIS.Operations.Generic;
 
 #if OS_WINDOWS
 using IRIS.Bluetooth.Windows.Communication;
@@ -91,7 +95,7 @@ namespace IRIS.Bluetooth.Devices
             {
 #if OS_LINUX
                 HardwareAccess =
- new LinuxBluetoothLEInterface(address); 
+ new LinuxBluetoothLEInterface(address);
 #endif
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
@@ -384,44 +388,45 @@ namespace IRIS.Bluetooth.Devices
         ///     device claiming, and initial configuration.
         /// </summary>
         /// <param name="cancellationToken">Token to cancel the operation.</param>
-        /// <returns>A ValueTask containing true if the connection was successful, false otherwise.</returns>
-        public override async ValueTask<bool> Connect(CancellationToken cancellationToken = default)
+        public override async ValueTask<IDeviceOperationResult> Connect(
+            CancellationToken cancellationToken = default)
         {
             // Connect to hardware access (ensure discovery is started)
-            await HardwareAccess.Connect(cancellationToken);
+            if (DeviceOperation.IsFailure(await HardwareAccess.Connect(cancellationToken)))
+                return DeviceOperation.Result<DeviceConnectionFailedResult>();
 
             // Wait for free device to appear
             Device = await HardwareAccess.ClaimDevice(cancellationToken);
 
             // Check if device was acquired correctly
-            if (Device == null) return false;
+            if (Device == null) DeviceOperation.Result<DeviceNotFoundResult>();
 
             // Wait a while for device to be connected properly
             // as BLE seems to have small issues when this is not provided
             await Task.Delay(25, cancellationToken);
-            
+
             // Configure device as OnDeviceConnected won't be called
             _ConfigureDevice();
 
-            return true;
+            return DeviceOperation.Result<DeviceConnectedSuccessfullyResult>();
         }
 
         /// <summary>
         ///     Disconnects from the Bluetooth LE device and releases associated resources.
         /// </summary>
         /// <param name="cancellationToken">Token to cancel the operation.</param>
-        /// <returns>A ValueTask containing true if the disconnection was successful, false otherwise.</returns>
-        public override ValueTask<bool> Disconnect(CancellationToken cancellationToken = default)
+        public override ValueTask<IDeviceOperationResult> Disconnect(CancellationToken cancellationToken = default)
         {
             // Prevent doing any operations on this device
             IsReady = false;
 
-            // Check if device is null
-            if (Device == null) return ValueTask.FromResult(false);
+            // Check if device is null, we assume null means 
+            // that device was already disconnected
+            if (Device == null) return DeviceOperation.VResult<DeviceAlreadyDisconnectedResult>();
 
             // Release device
             ReleaseDevice();
-            return ValueTask.FromResult(true);
+            return DeviceOperation.VResult<DeviceDisconnectedSuccessfullyResult>();
         }
 
         /// <summary>
