@@ -54,6 +54,9 @@ namespace IRIS.Bluetooth.Devices
 
                     // Call the loop method
                     await OnDeviceLoop(cancellationToken);
+                    
+                    // Small delay to reduce DPA issues
+                    await Task.Delay(5, cancellationToken);
                 }
                 catch (Exception anyException)
                 {
