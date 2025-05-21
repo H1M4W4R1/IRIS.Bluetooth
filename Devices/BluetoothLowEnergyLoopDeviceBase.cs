@@ -43,8 +43,9 @@ namespace IRIS.Bluetooth.Devices
             {
                 try
                 {
-                    // Check if the device is connected
-                    if (!IsConnected)
+                    // Check if the device is connected and ready for communication
+                    // to prevent sending data and bugging responses
+                    if (!IsConnected || !IsReady)
                     {
                         // Wait and ignore everything else
                         await Task.Delay(25, cancellationToken);
