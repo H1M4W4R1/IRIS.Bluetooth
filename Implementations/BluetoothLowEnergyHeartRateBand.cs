@@ -1,6 +1,9 @@
 ﻿using IRIS.Bluetooth.Common.Abstract;
 using IRIS.Bluetooth.Devices;
 using IRIS.Bluetooth.Implementations.Data;
+using IRIS.Operations;
+using IRIS.Operations.Abstract;
+using IRIS.Operations.Configuration;
 
 namespace IRIS.Bluetooth.Implementations
 {
@@ -31,10 +34,12 @@ namespace IRIS.Bluetooth.Implementations
         ///     Configures the heart rate monitoring device by establishing the required characteristic endpoint
         ///     and setting up notification handling for heart rate measurements.
         /// </summary>
-        public override async ValueTask Configure()
+        public override async ValueTask<IDeviceOperationResult> Configure()
         {
             HeartRateEndpoint = await Require(HEART_RATE_SERVICE_UUID, HEART_RATE_CHARACTERISTIC_UUID,
                 HandleHeartRateNotification);
+            
+            return DeviceOperation.Result<DeviceConfiguredSuccessfullyResult>();
         }
 
         /// <summary>

@@ -7,10 +7,13 @@ using IRIS.Bluetooth.Common.Addressing;
 using IRIS.Bluetooth.Common.Data;
 using IRIS.Bluetooth.Data;
 using IRIS.Bluetooth.Exceptions;
+using IRIS.Bluetooth.Operations;
 using IRIS.Devices;
 using IRIS.Operations;
 using IRIS.Operations.Abstract;
+using IRIS.Operations.Configuration;
 using IRIS.Operations.Connection;
+using IRIS.Utility;
 #if OS_WINDOWS
 using IRIS.Bluetooth.Windows.Communication;
 
@@ -130,7 +133,7 @@ namespace IRIS.Bluetooth.Devices
         ///     Abstract method that must be implemented by derived classes to handle device-specific configuration.
         ///     This is called after the device is connected and before it is marked as ready.
         /// </summary>
-        public abstract ValueTask Configure();
+        public abstract ValueTask<IDeviceOperationResult> Configure();
 
         /// <summary>
         ///     Detaches all event handlers from the device's characteristics and clears the subscription list.
@@ -152,21 +155,26 @@ namespace IRIS.Bluetooth.Devices
         ///     Internal method that handles device configuration and sets the ready flag.
         ///     Called after device connection is established.
         /// </summary>
-        private async void _ConfigureDevice()
+        private async ValueTask<IDeviceOperationResult> _ConfigureDevice()
         {
             try
             {
-                await Configure();
+                if (DeviceOperation.IsFailure(await Configure(), out IDeviceOperationResult proxyResult))
+                    return proxyResult;
+
                 IsReady = true;
+                return DeviceOperation.Result<DeviceConfiguredSuccessfullyResult>();
             }
             catch (MissingRequiredCharacteristicException)
             {
                 ReleaseDevice();
+                return DeviceOperation.Result<MissingRequiredCharacteristicResult>();
             }
             catch (Exception e)
             {
                 Debug.WriteLine($"Error configuring device: {e}");
                 ReleaseDevice();
+                return DeviceOperation.Result<DeviceConfigurationFailedResult>();
             }
         }
 
@@ -340,13 +348,13 @@ namespace IRIS.Bluetooth.Devices
 
             // Check if operation failed
             // TODO: Handle custom failure scenarios?
-            if (DeviceOperation.IsFailure(opResult)) 
+            if (DeviceOperation.IsFailure(opResult))
                 return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
-            
+
             // Acquire data from operation result
-            if(opResult is not IDeviceOperationResult<IReadOnlyList<IBluetoothLECharacteristic>> dataResult)
+            if (opResult is not IDeviceOperationResult<IReadOnlyList<IBluetoothLECharacteristic>> dataResult)
                 return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
-            
+
             // Check if any characteristics were found
             IBluetoothLECharacteristic? foundCharacteristic =
                 dataResult.Data.FirstOrDefault(c => c.IsValidForFlags(flags));
@@ -376,13 +384,13 @@ namespace IRIS.Bluetooth.Devices
 
             // Check if operation failed
             // TODO: Handle custom failure scenarios?
-            if (DeviceOperation.IsFailure(opResult)) 
+            if (DeviceOperation.IsFailure(opResult))
                 return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
-            
+
             // Acquire data from operation result
-            if(opResult is not IDeviceOperationResult<IReadOnlyList<IBluetoothLECharacteristic>> dataResult)
+            if (opResult is not IDeviceOperationResult<IReadOnlyList<IBluetoothLECharacteristic>> dataResult)
                 return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
-            
+
             // Check if any characteristics were found
             if (dataResult.Data.Count < 1) return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
 
@@ -417,7 +425,8 @@ namespace IRIS.Bluetooth.Devices
             await Task.Delay(25, cancellationToken);
 
             // Configure device as OnDeviceConnected won't be called
-            _ConfigureDevice();
+            if (DeviceOperation.IsFailure(await _ConfigureDevice(), out IDeviceOperationResult proxyResult))
+                return proxyResult;
 
             return DeviceOperation.Result<DeviceConnectedSuccessfullyResult>();
         }
@@ -469,7 +478,7 @@ namespace IRIS.Bluetooth.Devices
             if (device != Device) return;
 
             // Device is connected, configure this device
-            _ConfigureDevice();
+            _ConfigureDevice().Forget();
         }
 
         /// <summary>
