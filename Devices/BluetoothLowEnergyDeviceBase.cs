@@ -334,13 +334,22 @@ namespace IRIS.Bluetooth.Devices
             if (Device == null) return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
 
             // Check if service is null and acquire characteristics based on that
-            IReadOnlyList<IBluetoothLECharacteristic> characteristics = string.IsNullOrEmpty(serviceUUIDRegex)
+            IDeviceOperationResult opResult = string.IsNullOrEmpty(serviceUUIDRegex)
                 ? Device.GetAllCharacteristics()
                 : Device.GetAllCharacteristicsForServices(serviceUUIDRegex);
 
+            // Check if operation failed
+            // TODO: Handle custom failure scenarios?
+            if (DeviceOperation.IsFailure(opResult)) 
+                return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
+            
+            // Acquire data from operation result
+            if(opResult is not IDeviceOperationResult<IReadOnlyList<IBluetoothLECharacteristic>> dataResult)
+                return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
+            
             // Check if any characteristics were found
             IBluetoothLECharacteristic? foundCharacteristic =
-                characteristics.FirstOrDefault(c => c.IsValidForFlags(flags));
+                dataResult.Data.FirstOrDefault(c => c.IsValidForFlags(flags));
 
             return ValueTask.FromResult(foundCharacteristic);
         }
@@ -361,16 +370,25 @@ namespace IRIS.Bluetooth.Devices
             if (Device == null) return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
 
             // Check if service is null and acquire characteristics based on that
-            IReadOnlyList<IBluetoothLECharacteristic> characteristics = string.IsNullOrEmpty(serviceUUIDRegex)
+            IDeviceOperationResult opResult = string.IsNullOrEmpty(serviceUUIDRegex)
                 ? Device.GetAllCharacteristics()
                 : Device.GetAllCharacteristicsForServices(serviceUUIDRegex);
 
+            // Check if operation failed
+            // TODO: Handle custom failure scenarios?
+            if (DeviceOperation.IsFailure(opResult)) 
+                return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
+            
+            // Acquire data from operation result
+            if(opResult is not IDeviceOperationResult<IReadOnlyList<IBluetoothLECharacteristic>> dataResult)
+                return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
+            
             // Check if any characteristics were found
-            if (characteristics.Count < 1) return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
+            if (dataResult.Data.Count < 1) return ValueTask.FromResult<IBluetoothLECharacteristic?>(null);
 
             // Check if the characteristic is not null
-            IBluetoothLECharacteristic? characteristic = characteristics
-                .FirstOrDefault(c => Regex.IsMatch(c.UUID, characteristicUUIDRegex));
+            IBluetoothLECharacteristic? characteristic = dataResult
+                .Data.FirstOrDefault(c => Regex.IsMatch(c.UUID, characteristicUUIDRegex));
 
             return ValueTask.FromResult(characteristic);
         }
