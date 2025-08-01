@@ -13,6 +13,7 @@ using IRIS.Operations;
 using IRIS.Operations.Abstract;
 using IRIS.Operations.Configuration;
 using IRIS.Operations.Connection;
+using IRIS.Operations.Generic;
 using IRIS.Utility;
 #if OS_WINDOWS
 using IRIS.Bluetooth.Windows.Communication;
@@ -39,8 +40,19 @@ namespace IRIS.Bluetooth.Devices
         ///     Indicates whether the device is currently connected to the hardware layer.
         ///     Returns true if the Device property is not null.
         /// </summary>
-        public bool IsConnected => Device != null;
+        public bool IsConnected => Device != null && HardwareAccess.IsDeviceConnected(Device.DeviceAddress);
+        
+        /// <summary>
+        ///     Used to determine if device should be connected
+        ///     useful to detect when connection is lost
+        /// </summary>
+        public bool ShouldBeConnected { get; private set; }
 
+        /// <summary>
+        ///     True if device is being connected to
+        /// </summary>
+        public bool IsConnecting { get; private set; }
+        
         /// <summary>
         ///     Indicates whether the device is fully initialized and ready for use.
         ///     This flag accounts for platform-specific initialization delays, particularly on Linux
@@ -163,16 +175,18 @@ namespace IRIS.Bluetooth.Devices
                     return proxyResult;
 
                 IsReady = true;
+                Notify.Verbose(nameof(BluetoothLowEnergyDeviceBase), $"Device {Device?.Name} ({Device?.DeviceAddress:X}) successfully configured.");
                 return DeviceOperation.Result<DeviceConfiguredSuccessfullyResult>();
             }
             catch (MissingRequiredCharacteristicException)
             {
+                Notify.Error(nameof(BluetoothLowEnergyDeviceBase), $"Device {Device?.Name} ({Device?.DeviceAddress:X}) is missing required characteristic.");
                 ReleaseDevice();
                 return DeviceOperation.Result<DeviceMissingRequiredCharacteristicResult>();
             }
             catch (Exception e)
             {
-                Debug.WriteLine($"Error configuring device: {e}");
+                Notify.Error(nameof(BluetoothLowEnergyDeviceBase), $"Device {Device?.Name} ({Device?.DeviceAddress:X}) configuration failed due to exception: {e.Message}");
                 ReleaseDevice();
                 return DeviceOperation.Result<DeviceConfigurationFailedResult>();
             }
@@ -410,16 +424,28 @@ namespace IRIS.Bluetooth.Devices
         public override async ValueTask<IDeviceOperationResult> Connect(
             CancellationToken cancellationToken = default)
         {
+            // Prevent multiple connections at same time
+            if (IsConnecting) return DeviceOperation.Result<DeviceNotAvailableResult>();
+            
+            IsConnecting = true;
+            ShouldBeConnected = true;
+            
             // Connect to hardware access (ensure discovery is started)
             if (DeviceOperation.IsFailure(await HardwareAccess.Connect(cancellationToken)))
+            {
+                IsConnecting = false;
                 return DeviceOperation.Result<DeviceConnectionFailedResult>();
+            }
 
             // Wait for free device to appear
             Device = await HardwareAccess.ClaimDevice(cancellationToken);
 
             // Check if device was acquired correctly
-            if (Device == null) 
+            if (Device == null)
+            {
+                IsConnecting = false;
                 return DeviceOperation.Result<DeviceNotFoundResult>();
+            }
 
             // Wait a while for device to be connected properly
             // as BLE seems to have small issues when this is not provided
@@ -427,8 +453,12 @@ namespace IRIS.Bluetooth.Devices
 
             // Configure device as OnDeviceConnected won't be called
             if (DeviceOperation.IsFailure(await _ConfigureDevice(), out IDeviceOperationResult proxyResult))
+            {
+                IsConnecting = false;
                 return proxyResult;
+            }
 
+            IsConnecting = false;
             return DeviceOperation.Result<DeviceConnectedSuccessfullyResult>();
         }
 
@@ -439,6 +469,7 @@ namespace IRIS.Bluetooth.Devices
         public override ValueTask<IDeviceOperationResult> Disconnect(CancellationToken cancellationToken = default)
         {
             // Prevent doing any operations on this device
+            ShouldBeConnected = false;
             IsReady = false;
 
             // Check if device is null, we assume null means 
