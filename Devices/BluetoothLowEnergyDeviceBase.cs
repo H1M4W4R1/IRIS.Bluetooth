@@ -431,10 +431,13 @@ namespace IRIS.Bluetooth.Devices
             ShouldBeConnected = true;
             
             // Connect to hardware access (ensure discovery is started)
-            if (DeviceOperation.IsFailure(await HardwareAccess.Connect(cancellationToken)))
+            if (!HardwareAccess.IsRunning)
             {
-                IsConnecting = false;
-                return DeviceOperation.Result<DeviceConnectionFailedResult>();
+                if (DeviceOperation.IsFailure(await HardwareAccess.Connect(cancellationToken)))
+                {
+                    IsConnecting = false;
+                    return DeviceOperation.Result<DeviceConnectionFailedResult>();
+                }
             }
 
             // Wait for free device to appear
