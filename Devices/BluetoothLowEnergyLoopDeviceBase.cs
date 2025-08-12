@@ -44,7 +44,8 @@ namespace IRIS.Bluetooth.Devices
                 try
                 {
                     // Try to reconnect if necessary
-                    if (!IsConnected && ShouldBeConnected) await Connect(cancellationToken);
+                    // if (!IsConnected && ShouldBeConnected) await Connect(cancellationToken);
+                    // NOTE: Moved to disconnection handler in base class, keep for reference
                     
                     // Check if the device is connected and ready for communication
                     // to prevent sending data and bugging responses

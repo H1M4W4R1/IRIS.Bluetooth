@@ -67,6 +67,11 @@ namespace IRIS.Bluetooth.Devices
         public IBluetoothLEDevice? Device { get; private set; }
 
         /// <summary>
+        ///     Address used to reconnect to same device when connection was lost.
+        /// </summary>
+        public IBluetoothLEAddress? ReconnectAddress { get; private set; }
+        
+        /// <summary>
         ///     Initializes a new BLE device using a regex pattern to match device names or service UUIDs.
         /// </summary>
         /// <param name="regexPattern">The regex pattern to match against device names or service UUIDs</param>
@@ -130,6 +135,7 @@ namespace IRIS.Bluetooth.Devices
 
             HardwareAccess.OnBluetoothDeviceConnected += OnDeviceConnected;
             HardwareAccess.OnBluetoothDeviceDisconnected += OnDeviceDisconnected;
+            HardwareAccess.OnBluetoothDeviceConnectionLost += OnDeviceConnectionLost;
         }
 
         /// <summary>
@@ -139,6 +145,7 @@ namespace IRIS.Bluetooth.Devices
         {
             HardwareAccess.OnBluetoothDeviceConnected -= OnDeviceConnected;
             HardwareAccess.OnBluetoothDeviceDisconnected -= OnDeviceDisconnected;
+            HardwareAccess.OnBluetoothDeviceConnectionLost -= OnDeviceConnectionLost;
         }
 
         /// <summary>
@@ -441,7 +448,7 @@ namespace IRIS.Bluetooth.Devices
             }
 
             // Wait for free device to appear
-            Device = await HardwareAccess.ClaimDevice(cancellationToken);
+            Device = await HardwareAccess.ClaimDevice(ReconnectAddress, cancellationToken);
 
             // Check if device was acquired correctly
             if (Device == null)
@@ -460,7 +467,8 @@ namespace IRIS.Bluetooth.Devices
                 IsConnecting = false;
                 return proxyResult;
             }
-
+            
+            ReconnectAddress = new BluetoothLEDeviceIdentifierAddress(Device.DeviceAddress);
             IsConnecting = false;
             return DeviceOperation.Result<DeviceConnectedSuccessfullyResult>();
         }
@@ -472,6 +480,7 @@ namespace IRIS.Bluetooth.Devices
         public override ValueTask<IDeviceOperationResult> Disconnect(CancellationToken cancellationToken = default)
         {
             // Prevent doing any operations on this device
+            ReconnectAddress = null;
             ShouldBeConnected = false;
             IsReady = false;
 
@@ -526,15 +535,28 @@ namespace IRIS.Bluetooth.Devices
         {
             if (device != Device) return;
 
+            // Disconnect when device is disconnected
+            await Disconnect();
+            IsReady = false;
+        }
+        
+        private async void OnDeviceConnectionLost(IBluetoothLEInterface sender, IBluetoothLEDevice device)
+        {
+            if (device != Device) return;
+
             // Cache property for further execution
             bool shouldReconnect = ShouldBeConnected;
+            IBluetoothLEAddress? reconnectAddress = ReconnectAddress;
             
             // Disconnect when device is disconnected
             await Disconnect();
             IsReady = false;
-
+            
+            // Copy variables back to proper locations
+            ReconnectAddress = reconnectAddress;
+ 
             // Reconnect device
-            if (shouldReconnect) await Connect();
+            while (shouldReconnect && !IsConnected) await Connect();
         }
     }
 }
