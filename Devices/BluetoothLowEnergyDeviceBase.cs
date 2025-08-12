@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using IRIS.Bluetooth.Common;
 using IRIS.Bluetooth.Common.Abstract;
@@ -48,6 +47,16 @@ namespace IRIS.Bluetooth.Devices
         /// </summary>
         public bool ShouldBeConnected { get; private set; }
 
+        /// <summary>
+        ///     Reconnect mode of this device. Used to determine if device should reconnect
+        ///     automatically to same address or similar device.
+        /// </summary>
+        /// <remarks>
+        ///     Changing this property mid-reconnection won't affect it. Only next reconnections will be
+        ///     affected, as it's verified before reconnection attempt occurs.
+        /// </remarks>
+        public BluetoothReconnectMode ReconnectMode { get; set; } = BluetoothReconnectMode.SameAddress;
+        
         /// <summary>
         ///     True if device is being connected to
         /// </summary>
@@ -544,19 +553,28 @@ namespace IRIS.Bluetooth.Devices
         {
             if (device != Device) return;
 
-            // Cache property for further execution
-            bool shouldReconnect = ShouldBeConnected;
-            IBluetoothLEAddress? reconnectAddress = ReconnectAddress;
+            ulong deviceAddress = Device.DeviceAddress;
+            bool shouldBeConnected = ShouldBeConnected;
             
             // Disconnect when device is disconnected
             await Disconnect();
             IsReady = false;
             
             // Copy variables back to proper locations
-            ReconnectAddress = reconnectAddress;
+            switch (ReconnectMode)
+            {
+                case BluetoothReconnectMode.SameAddress:
+                    ReconnectAddress = new BluetoothLEDeviceIdentifierAddress(deviceAddress); break;
+                case BluetoothReconnectMode.SameName:
+                    ReconnectAddress = new BluetoothLENameAddress(device.Name); break;
+                case BluetoothReconnectMode.AnySimilarDevice: break; // Handled by HardwareAccess
+                case BluetoothReconnectMode.Disabled: return; // Do not execute reconnect code
+            }
  
             // Reconnect device
-            while (shouldReconnect && !IsConnected) await Connect();
+            // ShouldBeConnected is verified to ensure device was not disconnected the regular way
+            // and something went very wrong
+            while (shouldBeConnected && !IsConnected) await Connect();
         }
     }
 }
