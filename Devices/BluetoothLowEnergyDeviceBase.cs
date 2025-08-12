@@ -417,7 +417,7 @@ namespace IRIS.Bluetooth.Devices
 
             // Check if the characteristic is not null
             IBluetoothLECharacteristic? characteristic = dataResult
-                .Data.FirstOrDefault(c => Regex.IsMatch(c.UUID, characteristicUUIDRegex));
+                .Data.FirstOrDefault(c => Regex.IsMatch(c.UUID, characteristicUUIDRegex, RegexOptions.IgnoreCase));
 
             return ValueTask.FromResult(characteristic);
         }
