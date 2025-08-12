@@ -40,13 +40,7 @@ namespace IRIS.Bluetooth.Devices
         ///     Returns true if the Device property is not null.
         /// </summary>
         public bool IsConnected => Device != null && HardwareAccess.IsDeviceConnected(Device.DeviceAddress);
-        
-        /// <summary>
-        ///     Used to determine if device should be connected
-        ///     useful to detect when connection is lost
-        /// </summary>
-        public bool ShouldBeConnected { get; private set; }
-
+    
         /// <summary>
         ///     Reconnect mode of this device. Used to determine if device should reconnect
         ///     automatically to same address or similar device.
@@ -75,11 +69,6 @@ namespace IRIS.Bluetooth.Devices
         /// </summary>
         public IBluetoothLEDevice? Device { get; private set; }
 
-        /// <summary>
-        ///     Address used to reconnect to same device when connection was lost.
-        /// </summary>
-        public IBluetoothLEAddress? ReconnectAddress { get; private set; }
-        
         /// <summary>
         ///     Initializes a new BLE device using a regex pattern to match device names or service UUIDs.
         /// </summary>
@@ -437,14 +426,23 @@ namespace IRIS.Bluetooth.Devices
         ///     device claiming, and initial configuration.
         /// </summary>
         /// <param name="cancellationToken">Token to cancel the operation.</param>
-        public override async ValueTask<IDeviceOperationResult> Connect(
+        public override ValueTask<IDeviceOperationResult> Connect(
+            CancellationToken cancellationToken = default) => Connect(null, cancellationToken);
+        
+        /// <summary>
+        ///     Establishes a connection to the Bluetooth LE device.
+        ///     This method handles the connection process, including hardware access initialization,
+        ///     device claiming, and initial configuration.
+        /// </summary>
+        /// <param name="deviceAddress">Address to validate device against when claiming</param>
+        /// <param name="cancellationToken">Token to cancel the operation.</param>
+        public async ValueTask<IDeviceOperationResult> Connect(
+            IBluetoothLEAddress? deviceAddress,
             CancellationToken cancellationToken = default)
         {
             // Prevent multiple connections at same time
             if (IsConnecting) return DeviceOperation.Result<DeviceNotAvailableResult>();
-            
             IsConnecting = true;
-            ShouldBeConnected = true;
             
             // Connect to hardware access (ensure discovery is started)
             if (!HardwareAccess.IsRunning)
@@ -457,7 +455,7 @@ namespace IRIS.Bluetooth.Devices
             }
 
             // Wait for free device to appear
-            Device = await HardwareAccess.ClaimDevice(ReconnectAddress, cancellationToken);
+            Device = await HardwareAccess.ClaimDevice(deviceAddress, cancellationToken);
 
             // Check if device was acquired correctly
             if (Device == null)
@@ -477,7 +475,6 @@ namespace IRIS.Bluetooth.Devices
                 return proxyResult;
             }
             
-            ReconnectAddress = new BluetoothLEDeviceIdentifierAddress(Device.DeviceAddress);
             IsConnecting = false;
             return DeviceOperation.Result<DeviceConnectedSuccessfullyResult>();
         }
@@ -489,8 +486,6 @@ namespace IRIS.Bluetooth.Devices
         public override ValueTask<IDeviceOperationResult> Disconnect(CancellationToken cancellationToken = default)
         {
             // Prevent doing any operations on this device
-            ReconnectAddress = null;
-            ShouldBeConnected = false;
             IsReady = false;
 
             // Check if device is null, we assume null means 
@@ -552,21 +547,20 @@ namespace IRIS.Bluetooth.Devices
         private async void OnDeviceConnectionLost(IBluetoothLEInterface sender, IBluetoothLEDevice device)
         {
             if (device != Device) return;
-
             ulong deviceAddress = Device.DeviceAddress;
-            bool shouldBeConnected = ShouldBeConnected;
             
             // Disconnect when device is disconnected
             await Disconnect();
             IsReady = false;
-            
-            // Copy variables back to proper locations
+
+            // Handle device reconnection methodology
+            IBluetoothLEAddress? reconnectAddress = null;
             switch (ReconnectMode)
             {
                 case BluetoothReconnectMode.SameAddress:
-                    ReconnectAddress = new BluetoothLEDeviceIdentifierAddress(deviceAddress); break;
+                    reconnectAddress = new BluetoothLEDeviceIdentifierAddress(deviceAddress); break;
                 case BluetoothReconnectMode.SameName:
-                    ReconnectAddress = new BluetoothLENameAddress(device.Name); break;
+                    reconnectAddress = new BluetoothLENameAddress(device.Name); break;
                 case BluetoothReconnectMode.AnySimilarDevice: break; // Handled by HardwareAccess
                 case BluetoothReconnectMode.Disabled: return; // Do not execute reconnect code
             }
@@ -574,7 +568,7 @@ namespace IRIS.Bluetooth.Devices
             // Reconnect device
             // ShouldBeConnected is verified to ensure device was not disconnected the regular way
             // and something went very wrong
-            while (shouldBeConnected && !IsConnected) await Connect();
+            if (!IsConnected) await Connect(reconnectAddress);
         }
     }
 }
