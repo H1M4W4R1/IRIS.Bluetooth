@@ -131,9 +131,9 @@ namespace IRIS.Bluetooth.Devices
 #endif
             }
 
-            HardwareAccess.OnBluetoothDeviceConnected += OnDeviceConnected;
-            HardwareAccess.OnBluetoothDeviceDisconnected += OnDeviceDisconnected;
-            HardwareAccess.OnBluetoothDeviceConnectionLost += OnDeviceConnectionLost;
+            HardwareAccess.OnBluetoothDeviceConnected += _OnDeviceConnected;
+            HardwareAccess.OnBluetoothDeviceDisconnected += _OnDeviceDisconnected;
+            HardwareAccess.OnBluetoothDeviceConnectionLost += _OnDeviceConnectionLost;
         }
 
         /// <summary>
@@ -141,9 +141,9 @@ namespace IRIS.Bluetooth.Devices
         /// </summary>
         ~BluetoothLowEnergyDeviceBase()
         {
-            HardwareAccess.OnBluetoothDeviceConnected -= OnDeviceConnected;
-            HardwareAccess.OnBluetoothDeviceDisconnected -= OnDeviceDisconnected;
-            HardwareAccess.OnBluetoothDeviceConnectionLost -= OnDeviceConnectionLost;
+            HardwareAccess.OnBluetoothDeviceConnected -= _OnDeviceConnected;
+            HardwareAccess.OnBluetoothDeviceDisconnected -= _OnDeviceDisconnected;
+            HardwareAccess.OnBluetoothDeviceConnectionLost -= _OnDeviceConnectionLost;
         }
 
         /// <summary>
@@ -179,6 +179,8 @@ namespace IRIS.Bluetooth.Devices
                 if (DeviceOperation.IsFailure(await Configure(), out IDeviceOperationResult proxyResult))
                     return proxyResult;
 
+                await OnDeviceConfigured();
+                
                 IsReady = true;
                 Notify.Verbose(nameof(BluetoothLowEnergyDeviceBase), $"Device {Device?.Name} ({Device?.DeviceAddress:X}) successfully configured.");
                 return DeviceOperation.Result<DeviceConfiguredSuccessfullyResult>();
@@ -186,13 +188,13 @@ namespace IRIS.Bluetooth.Devices
             catch (MissingRequiredCharacteristicException)
             {
                 Notify.Error(nameof(BluetoothLowEnergyDeviceBase), $"Device {Device?.Name} ({Device?.DeviceAddress:X}) is missing required characteristic.");
-                ReleaseDevice();
+                await ReleaseDevice();
                 return DeviceOperation.Result<DeviceMissingRequiredCharacteristicResult>();
             }
             catch (Exception e)
             {
                 Notify.Error(nameof(BluetoothLowEnergyDeviceBase), $"Device {Device?.Name} ({Device?.DeviceAddress:X}) configuration failed due to exception: {e.Message}");
-                ReleaseDevice();
+                await ReleaseDevice();
                 return DeviceOperation.Result<DeviceConfigurationFailedResult>();
             }
         }
@@ -476,6 +478,7 @@ namespace IRIS.Bluetooth.Devices
             }
             
             IsConnecting = false;
+            await OnDeviceConnected();
             return DeviceOperation.Result<DeviceConnectedSuccessfullyResult>();
         }
 
@@ -483,25 +486,29 @@ namespace IRIS.Bluetooth.Devices
         ///     Disconnects from the Bluetooth LE device and releases associated resources.
         /// </summary>
         /// <param name="cancellationToken">Token to cancel the operation.</param>
-        public override ValueTask<IDeviceOperationResult> Disconnect(CancellationToken cancellationToken = default)
+        public override async ValueTask<IDeviceOperationResult> Disconnect(CancellationToken cancellationToken = default)
         {
+            // Handle disconnection early steps
+            await OnBeforeDeviceDisconnected();
+            
             // Prevent doing any operations on this device
             IsReady = false;
 
             // Check if device is null, we assume null means 
             // that device was already disconnected
-            if (Device == null) return DeviceOperation.VResult<DeviceAlreadyDisconnectedResult>();
+            if (Device == null) return DeviceOperation.Result<DeviceAlreadyDisconnectedResult>();
 
             // Release device
-            ReleaseDevice();
-            return DeviceOperation.VResult<DeviceDisconnectedSuccessfullyResult>();
+            await ReleaseDevice();
+            await OnDeviceDisconnected();
+            return DeviceOperation.Result<DeviceDisconnectedSuccessfullyResult>();
         }
 
         /// <summary>
         ///     Releases the device and cleans up associated resources.
         ///     This method handles event detachment and device release through the hardware access layer.
         /// </summary>
-        private async void ReleaseDevice()
+        private async ValueTask ReleaseDevice()
         {
             // Check if device is null
             if (Device == null) return;
@@ -521,7 +528,7 @@ namespace IRIS.Bluetooth.Devices
         /// </summary>
         /// <param name="sender">The sender of the event.</param>
         /// <param name="device">The connected device.</param>
-        private void OnDeviceConnected(IBluetoothLEInterface sender, IBluetoothLEDevice device)
+        private void _OnDeviceConnected(IBluetoothLEInterface sender, IBluetoothLEDevice device)
         {
             if (device != Device) return;
 
@@ -535,7 +542,7 @@ namespace IRIS.Bluetooth.Devices
         /// </summary>
         /// <param name="sender">The sender of the event.</param>
         /// <param name="device">The disconnected device.</param>
-        private async void OnDeviceDisconnected(IBluetoothLEInterface sender, IBluetoothLEDevice device)
+        private async void _OnDeviceDisconnected(IBluetoothLEInterface sender, IBluetoothLEDevice device)
         {
             if (device != Device) return;
 
@@ -544,7 +551,7 @@ namespace IRIS.Bluetooth.Devices
             IsReady = false;
         }
         
-        private async void OnDeviceConnectionLost(IBluetoothLEInterface sender, IBluetoothLEDevice device)
+        private async void _OnDeviceConnectionLost(IBluetoothLEInterface sender, IBluetoothLEDevice device)
         {
             if (device != Device) return;
             ulong deviceAddress = Device.DeviceAddress;
@@ -553,6 +560,8 @@ namespace IRIS.Bluetooth.Devices
             await Disconnect();
             IsReady = false;
 
+            await OnDeviceConnectionLost();
+            
             // Handle device reconnection methodology
             IBluetoothLEAddress? reconnectAddress = null;
             switch (ReconnectMode)
@@ -570,5 +579,52 @@ namespace IRIS.Bluetooth.Devices
             // and something went very wrong
             if (!IsConnected) await Connect(reconnectAddress);
         }
+
+        /// <summary>
+        ///     Event raised before device disconnection occurs,
+        ///     can be used to stop device operation early
+        /// </summary>
+        protected virtual ValueTask OnBeforeDeviceDisconnected()
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        /// <summary>
+        ///     Event raised after device was connected successfully
+        /// </summary>
+        protected virtual ValueTask OnDeviceConnected()
+        {
+            // Do nothing for now
+            return ValueTask.CompletedTask;
+        }
+
+        /// <summary>
+        ///     Event raised after device was disconnected successfully
+        /// </summary>
+        protected virtual ValueTask OnDeviceDisconnected()
+        {
+            // Do nothing for now
+            return ValueTask.CompletedTask;
+        }
+
+        
+        /// <summary>
+        ///     Event raised after device connection was lost
+        /// </summary>
+        protected virtual ValueTask OnDeviceConnectionLost()
+        {
+            // Do nothing for now
+            return ValueTask.CompletedTask;
+        }
+
+        /// <summary>
+        ///     Event raised after device was configured
+        /// </summary>
+        protected virtual ValueTask OnDeviceConfigured()
+        {
+            // Do nothing for now
+            return ValueTask.CompletedTask;
+        }
+        
     }
 }
