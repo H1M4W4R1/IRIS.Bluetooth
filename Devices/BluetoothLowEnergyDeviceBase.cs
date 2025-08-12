@@ -526,9 +526,15 @@ namespace IRIS.Bluetooth.Devices
         {
             if (device != Device) return;
 
+            // Cache property for further execution
+            bool shouldReconnect = ShouldBeConnected;
+            
             // Disconnect when device is disconnected
             await Disconnect();
             IsReady = false;
+
+            // Reconnect device
+            if (shouldReconnect) await Connect();
         }
     }
 }
